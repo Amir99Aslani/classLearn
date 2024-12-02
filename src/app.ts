@@ -1,9 +1,11 @@
-function logger(target: Function) {
-    console.log("logging...");
-    console.log(target)
+function logger(logString: string) {
+    return function (constructor: Function) {
+        console.log(logString)
+        console.log(constructor)
+    }
 }
 
-@logger
+@logger('log some shit')
 class person {
     name = "max";
 

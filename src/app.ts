@@ -67,4 +67,81 @@ myBTN.addEventListener('click', printer.showMessage);
 
 
 //####################################################################################################################
+console.log("//####################################################################################################################")
 
+
+interface validationConfig {
+    [property: string]: {
+        [validatableProp: string]: string[]; // ['required', 'positive']
+    }
+}
+
+const registeredValidators: validationConfig = {};
+
+
+function requiredDec(target: any, propName: string) {
+    registeredValidators[target.constructor.name] = {
+        ...registeredValidators[target.constructor.name],
+        [propName]: ["required"]
+    }
+}
+
+function greaterThanZero(target: any, propName: string) {
+    registeredValidators[target.constructor.name] = {
+        ...registeredValidators[target.constructor.name],
+        [propName]: ["greaterThanZero"]
+    }
+}
+
+function validateClass(classObject: any)  {
+    const objValidatorConfig = registeredValidators[classObject.constructor.name];
+    if (!objValidatorConfig) {
+        return true;
+    }
+    let isValid = true;
+    for (const props in objValidatorConfig){
+        for (const validator of objValidatorConfig[props]){
+            if (validator === 'required'){
+                isValid = isValid && !!classObject[props];
+            }
+            if (validator === 'greaterThanZero'){
+                isValid = isValid && classObject[props] > 0;
+            }
+        }
+    }
+
+    return(isValid);
+}
+
+class MyCourse {
+    @requiredDec
+    name: string;
+    @greaterThanZero
+    price: number;
+
+    constructor(n: string, p: number) {
+        this.name = n
+        this.price = p
+    }
+}
+
+const courseForm = document.querySelector('form')!;
+courseForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const titleEl = document.getElementById('title') as HTMLInputElement;
+    const priceEl = document.getElementById('price') as HTMLInputElement;
+
+    const title = titleEl.value;
+    const price = +priceEl.value;
+
+    titleEl.value = "";
+    priceEl.value = "0";
+
+    const createdCourse = new MyCourse(title, price);
+
+    if (!validateClass(createdCourse)) {
+        alert('Invalid input, please try again!');
+        return;
+    }
+    console.log(createdCourse);
+});

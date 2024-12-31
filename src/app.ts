@@ -7,6 +7,21 @@ interface validationRole {
     maxValue?: number;
 }
 
+//draganddrop
+interface Draggable {
+    Dragstart(event: DragEvent): void;
+
+    DragEnd(event: DragEvent): void;
+}
+
+interface DragTarget {
+    dragOver(event: DragEvent): void;
+
+    drop(event: DragEvent): void;
+
+    dragLeave(event: DragEvent): void;
+}
+
 function validation(input: validationRole) {
     let isValid = true;
     if (input.required) {
@@ -127,6 +142,16 @@ class ProjectState {
         }
     }
 
+    moveProject(projectId: string, newStatus: ProjectStatus) {
+        const project = this.projects.find(prj => prj.id === projectId);
+        if (project && project.status !== newStatus) {
+            project.status = newStatus;
+            for (const listenerfn of this.listener) {
+                listenerfn(this.projects.slice());
+            }
+        }
+    }
+
     addListener(listenerfn: Listener) {
         this.listener.push(listenerfn);
     }
@@ -134,7 +159,7 @@ class ProjectState {
 
 const projectState = ProjectState.getInstance();
 
-class projectList extends Component<HTMLDivElement, HTMLElement> {
+class projectList extends Component<HTMLDivElement, HTMLElement> implements DragTarget {
     assignProject: Project[];
 
     constructor(private type: "active" | "finished") {
@@ -150,13 +175,40 @@ class projectList extends Component<HTMLDivElement, HTMLElement> {
         const listEl = document.getElementById(`${this.type}-project-list`) as HTMLUListElement;
         listEl.innerHTML = '';
         for (const projectItem of this.assignProject) {
-            const listItem = document.createElement("li");
-            listItem.textContent = projectItem.title;
-            listEl.append(listItem);
+            new ProjectItem(this.element.querySelector("ul")!.id, projectItem);
+
+            // const listItem = document.createElement("li");
+            // listItem.textContent = projectItem.title;
+            // listEl.append(listItem);
         }
     }
 
+    @autoBindDec
+    dragOver(event: DragEvent) {
+        if (event.dataTransfer && event.dataTransfer.types[0] === "text/plain") {
+            event.preventDefault();
+            const listEl = this.element.querySelector("ul")!
+            listEl.classList.add("droppable");
+        }
+    }
+
+    @autoBindDec
+    drop(event: DragEvent) {
+        const prjId = event.dataTransfer!.getData("text/plain");
+        projectState.moveProject(prjId, this.type === "active" ? ProjectStatus.Active : ProjectStatus.Finished);
+    }
+
+    @autoBindDec
+    dragLeave(_: DragEvent) {
+        const listEl = this.element.querySelector("ul")!
+        listEl.classList.remove("droppable");
+    }
+
     configure() {
+        this.element.addEventListener("dragover", this.dragOver);
+        this.element.addEventListener("dragend", this.dragLeave);
+        this.element.addEventListener("drop", this.drop);
+
         projectState.addListener((projects: any[]) => {
 
             const relevantProjects = projects.filter(prj => {
@@ -171,7 +223,7 @@ class projectList extends Component<HTMLDivElement, HTMLElement> {
         });
     }
 
-     render() {
+    render() {
         const listId = `${this.type}-project-list`;
         this.element.querySelector("ul")!.id = listId;
         this.element.querySelector("h2")!.textContent =
@@ -180,13 +232,57 @@ class projectList extends Component<HTMLDivElement, HTMLElement> {
 
 }
 
-class ProjectInput extends Component<HTMLDivElement, HTMLFormElement>{
+class ProjectItem extends Component<HTMLUListElement, HTMLLIElement> implements Draggable {
+    private project: Project;
+
+    get person() {
+        if (this.project.people === 1) {
+            return "1 person";
+        } else if (this.project.people > 1) {
+            return this.project.people.toString() + " persons";
+        } else {
+            return "--";
+        }
+    }
+
+    constructor(hostId: string, project: Project) {
+        super('single-project', hostId, true, project.id);
+        this.project = project;
+
+        this.configure();
+        this.render();
+    }
+
+    @autoBindDec
+    Dragstart(event: DragEvent) {
+        event.dataTransfer!.setData("text/plain", this.project.id);
+        event.dataTransfer!.effectAllowed = "move";
+    }
+
+    @autoBindDec
+    DragEnd(_: DragEvent) {
+        console.log("dragend")
+    }
+
+    configure() {
+        this.element.addEventListener('dragstart', this.Dragstart)
+        this.element.addEventListener('dragend', this.DragEnd)
+    }
+
+    render() {
+        this.element.querySelector("h2")!.textContent = this.project.title;
+        this.element.querySelector("h3")!.textContent = this.person + " assigned";
+        this.element.querySelector("p")!.textContent = this.project.description;
+    }
+}
+
+class ProjectInput extends Component<HTMLDivElement, HTMLFormElement> {
     titleInputElement: HTMLInputElement;
     descriptionInputElement: HTMLInputElement;
     peopleInputElement: HTMLInputElement;
 
     constructor() {
-        super('project-input' , 'app' , true , 'user-input');
+        super('project-input', 'app', true, 'user-input');
 
         this.titleInputElement = this.element.querySelector('#title') as HTMLInputElement;
         this.descriptionInputElement = this.element.querySelector('#description') as HTMLInputElement;
@@ -213,7 +309,7 @@ class ProjectInput extends Component<HTMLDivElement, HTMLFormElement>{
         const peopleValidatable: validationRole = {
             value: +peopleNum,
             required: true,
-            minValue: 1,
+            minValue: 0,
             maxValue: 5
         };
 
@@ -241,13 +337,12 @@ class ProjectInput extends Component<HTMLDivElement, HTMLFormElement>{
         const userInputs = this.getUserInput();
         if (Array.isArray(userInputs)) {
             const [title, desc, people] = userInputs;
-            console.log(title, desc, people);
             projectState.addProject(title, desc, people);
             this.clearInputs();
         }
     }
 
-     configure() {
+    configure() {
         this.element.addEventListener('submit', this.submitHandler);
     }
 
